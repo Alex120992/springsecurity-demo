@@ -1,30 +1,36 @@
 package com.example.springsecuritydemo.config;
 
-import com.example.springsecuritydemo.model.role.Role;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 
 @Configuration
 @EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true)
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
-    /* кастомная реализация http
-     * antMatchers указывает на какие url кто имеет доступ
-     * permitAll - все имеют доступ
-     *  HttpMethod.GET, "/api/**" по данному адресу имеет право на чтение
-     * hasAnyRole - любая из указаныхх ролей
-     * httpBasic - и используем Base64
-     */
+
+    private final UserDetailsService userDetailsService;
+
+    @Autowired
+    public SecurityConfig(@Qualifier("userDetailsServiceImpl") UserDetailsService userDetailsService) {
+        this.userDetailsService = userDetailsService;
+    }
+
+
+
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         http
@@ -32,41 +38,152 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .authorizeRequests()
                 .antMatchers("/")
                 .permitAll()
-                .antMatchers(HttpMethod.GET, "/api/**").hasAnyRole(Role.ADMIN.name(), Role.USER.name())
-                .antMatchers(HttpMethod.POST, "/api/**").hasRole(Role.ADMIN.name())
-                .antMatchers(HttpMethod.DELETE, "/api/**").hasRole(Role.ADMIN.name())
                 .anyRequest()
                 .authenticated()
                 .and()
-                .httpBasic();
-
-
+                .formLogin()
+                .loginPage("/auth/login").permitAll()
+                .defaultSuccessUrl("/auth/success")
+                .and()
+                .logout().logoutRequestMatcher(new AntPathRequestMatcher("/auth/logout", "POST"))
+                .invalidateHttpSession(true)
+                .clearAuthentication(true)
+                .deleteCookies("JSESSIONID")
+                .logoutSuccessUrl("/auth/login");
     }
 
-
-    /* Так как данные пользователя хранятся в памяти, то сохраняем их в память*/
-
-    @Bean
     @Override
-    protected UserDetailsService userDetailsService() {
-        return new InMemoryUserDetailsManager(
-                User.builder()
-                        .username("admin")
-                        .password(passwordEncoder().encode("admin"))
-                        .roles(Role.ADMIN.name())
-                        .build(),
-                User.builder()
-                        .username("user")
-                        .password(passwordEncoder().encode("user"))
-                        .roles(Role.USER.name())
-                        .build()
-        );
-
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.authenticationProvider(daoAuthenticationProvider());
     }
 
-    /* Бин для шифровки пароля и данных*/
     @Bean
     protected PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
     }
+
+    @Bean
+    protected DaoAuthenticationProvider daoAuthenticationProvider() {
+        DaoAuthenticationProvider daoAuthenticationProvider = new DaoAuthenticationProvider();
+        daoAuthenticationProvider.setPasswordEncoder(passwordEncoder());
+        daoAuthenticationProvider.setUserDetailsService(userDetailsService);
+        return daoAuthenticationProvider;
+    }
+
+
+    /* кастомная реализация http
+     * antMatchers указывает на какие url кто имеет доступ
+     * permitAll - все имеют доступ
+     *  HttpMethod.GET, "/api/**" по данному адресу имеет право на чтение
+     * hasAnyRole - любая из указаныхх ролей
+     * httpBasic - и используем Base64
+     * formLogin - касмотная реализация ввода логина и пароля
+     * .logout().logoutRequestMatcher(new AntPathRequestMatcher("/auth/logout", "POST")); - логаут обрабатывается
+     * только по ссылке /auth/logout и метод используется POST.
+     */
+//    @Override
+//    protected void configure(HttpSecurity http) throws Exception {
+
+        //first version
+//        http
+//                .csrf().disable()
+//                .authorizeRequests()
+//                .antMatchers("/")
+//                .permitAll()
+//                .antMatchers(HttpMethod.GET, "/api/**").hasAnyRole(Role.ADMIN.name(), Role.USER.name())
+//                .antMatchers(HttpMethod.POST, "/api/**").hasRole(Role.ADMIN.name())
+//                .antMatchers(HttpMethod.DELETE, "/api/**").hasRole(Role.ADMIN.name())
+//                .anyRequest()
+//                .authenticated()
+//                .and()
+//                .httpBasic();
+        //second version
+//        http
+//                .csrf().disable()
+//                .authorizeRequests()
+//                .antMatchers("/")
+//                .permitAll()
+//                .antMatchers(HttpMethod.GET, "/api/**").hasAuthority(Permission.DEVELOPERS_READ.getPermission())
+//                .antMatchers(HttpMethod.POST, "/api/**").hasAuthority(Permission.DEVELOPERS_WRITE.getPermission())
+//                .antMatchers(HttpMethod.DELETE, "/api/**").hasAuthority(Permission.DEVELOPERS_WRITE.getPermission())
+//                .anyRequest()
+//                .authenticated()
+//                .and()
+//                .httpBasic();
+
+        //third version
+//        http
+//                .csrf().disable()
+//                .authorizeRequests()
+//                .antMatchers("/")
+//                .permitAll()
+//                .anyRequest()
+//                .authenticated()
+//                .and()
+//                .httpBasic();
+        //fourth version
+//        http
+//                .csrf().disable()
+//                .authorizeRequests()
+//                .antMatchers("/")
+//                .permitAll()
+//                .anyRequest()
+//                .authenticated()
+//                .and()
+//                .formLogin()
+//                .loginPage("/auth/login").permitAll()
+//                .defaultSuccessUrl("/auth/success")
+//                .and()
+//                .logout().logoutRequestMatcher(new AntPathRequestMatcher("/auth/logout", "POST"))
+//                .invalidateHttpSession(true)
+//                .clearAuthentication(true)
+//                .deleteCookies("JSESSIONID")
+//                .logoutSuccessUrl("/auth/login");
+//
+//
+//    }
+//
+//
+//    /* Так как данные пользователя хранятся в памяти, то сохраняем их в память*/
+//
+//    @Bean
+//    @Override
+//    protected UserDetailsService userDetailsService() {
+//        return new InMemoryUserDetailsManager(
+//
+//
+//                //second version
+//                User.builder()
+//                        .username("admin")
+//                        .password(passwordEncoder().encode("admin"))
+//                        .authorities(Role.ADMIN.getAuthorities())
+//                        .build(),
+//                User.builder()
+//                        .username("user")
+//                        .password(passwordEncoder().encode("user"))
+//                        .authorities(Role.USER.getAuthorities())
+//                        .build()
+//
+//
+//                //1-ая версия
+//
+////                User.builder()
+////                        .username("admin")
+////                        .password(passwordEncoder().encode("admin"))
+////                        .roles(Role.ADMIN.name())
+////                        .build(),
+////                User.builder()
+////                        .username("user")
+////                        .password(passwordEncoder().encode("user"))
+////                        .roles(Role.USER.name())
+////                        .build()
+//        );
+//
+//    }
+//
+//    /* Бин для шифровки пароля и данных*/
+//    @Bean
+//    protected PasswordEncoder passwordEncoder() {
+//        return new BCryptPasswordEncoder(12);
+//    }
 }
